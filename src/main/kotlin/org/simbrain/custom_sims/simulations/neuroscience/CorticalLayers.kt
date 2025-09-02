@@ -83,7 +83,7 @@ val corticalLayers = newSim {
         for (i in indices) {
             val neuron = layer.neuronList[i]
             val rule = neuron.updateRule as IntegrateAndFireRule
-            rule.backgroundCurrent = current  // Temporarily inject current
+            rule.backgroundCurrent = current  //temporarily inject current
         }
     }
 
