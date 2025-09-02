@@ -109,6 +109,16 @@ class ActivationSequence(val sequenceSize: Int, inputSize: Int): ArrayLayer(inpu
         events.updated.fire()
     }
 
+    override fun toString(): String {
+        return """
+                Name: $displayName ($sequenceSize x $inputSize)
+                Sequence Size: $sequenceSize
+                Input Size: $inputSize
+            """.trimIndent()
+    }
+
+    override val shapeString: String get() = "$sequenceSize x $inputSize"
+
     override fun clear() {
         activations.fill(0.0)
         events.updated.fire()
@@ -169,7 +179,7 @@ fun main() {
     wm.randomize()
 
     val net = Network()
-    net.addNetworkModels(source, target, wm)
+    net.addNetworkModelsAsync(source, target, wm)
 
     println(target.activations)
 

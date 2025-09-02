@@ -1,14 +1,10 @@
 package org.simbrain.custom_sims.simulations.neuroscience
 
-import org.simbrain.custom_sims.addNetworkComponent
-import org.simbrain.custom_sims.addRasterPlot
-import org.simbrain.custom_sims.couplingManager
-import org.simbrain.custom_sims.newSim
+import org.simbrain.custom_sims.*
 import org.simbrain.network.connections.Sparse
 import org.simbrain.network.core.SynapseGroup
 import org.simbrain.network.core.addNeuronGroup
 import org.simbrain.network.neurongroups.NeuronGroup
-import org.simbrain.network.spikeresponders.JumpAndDecay
 import org.simbrain.network.spikeresponders.ShortTermPlasticity
 import org.simbrain.network.updaterules.IntegrateAndFireRule
 import org.simbrain.plot.rasterchart.RasterPlotDesktopComponent
@@ -20,7 +16,6 @@ import org.simbrain.util.stats.ProbabilityDistribution
 import org.simbrain.util.stats.distributions.LogNormalDistribution
 import kotlin.math.sqrt
 import kotlin.random.Random
-import org.simbrain.custom_sims.*
 
 /**
  * Model of canonical cortex (Douglas and Martin, 2004) using rat barrel cortex
@@ -33,19 +28,18 @@ import org.simbrain.custom_sims.*
  * @author Zoë Tosi
  * @author Jeff Yoshimi
  */
-val cortexLayers = newSim {
+val corticalLayers = newSim {
 
     // Location and scale params for lognormal dist of all synapse groups
     var exlocation = 0.0
     var exscale = .5
     var inlocation = 1.0
     var inscale = .5
-    var neuronsPerLayer = 300 // Was 300
+    var neuronsPerLayer = 300
 
     // TODO: Membrane properties
     // TODO: Build using z coordinates
 
-    // Clear workspace
     workspace.clearWorkspace()
 
     // Build network
@@ -96,15 +90,33 @@ val cortexLayers = newSim {
     suspend fun connectLayers(
         src: NeuronGroup, tar: NeuronGroup,
         sparsity: Double,
-        spikeResponderParams: Triple<Double, Double, Double> = Triple(0.2, 600.0, 30.0)
+
     ): SynapseGroup {
-        val sg = SynapseGroup(src, tar, Sparse(sparsity, false, false))
-        // Set all weights to zero initially
-        sg.synapses.forEach { s ->
-            s.upperBound = 0.0
-            s.lowerBound = 0.0
+        val exRand: ProbabilityDistribution = LogNormalDistribution(exlocation, exscale, false)
+        val inRand: ProbabilityDistribution = LogNormalDistribution(inlocation, inscale, true)
+        val con = Sparse(sparsity, false, false)
+        val sg = SynapseGroup(src, tar, con)
+        sg.connectionStrategy.exRandomizer = exRand
+        sg.connectionStrategy.inRandomizer = inRand
+        sg.randomizeExcitatory()
+        sg.randomizeInhibitory()
+        sg.label = "Synapses"
+
+        sg.synapses.filter { it.source.polarity == Polarity.EXCITATORY }.forEach {
+            it.upperBound = 200.0
+            it.lowerBound = 0.0
         }
-        net.addNetworkModel(sg)?.await()
+        sg.synapses.filter { it.source.polarity == Polarity.INHIBITORY }.forEach {
+            it.upperBound = 0.0
+            it.lowerBound = -200.0
+        }
+
+        sg.synapses.forEach {
+            val stp = ShortTermPlasticity()
+            stp.init(it)
+            it.spikeResponder = stp
+        }
+        net.addNetworkModel(sg)
         return sg
     }
 
@@ -178,18 +190,20 @@ val cortexLayers = newSim {
         // Connect layers
         val synGroups: MutableMap<String, SynapseGroup> = HashMap()
         // Recurrent connections - moderate strength to maintain activity but prevent runaway
-        synGroups["L2/3 Rec."] = connectLayers(layer_23, layer_23, .12, Triple(0.15, 800.0, 25.0))
-        synGroups["L4 Rec."] = connectLayers(layer_4, layer_4, .24, Triple(0.15, 800.0, 25.0))
-        synGroups["L5/6 Rec."] = connectLayers(layer_56, layer_56, .24, Triple(0.15, 800.0, 25.0))
+        synGroups["L2/3 Rec."] = connectLayers(layer_23, layer_23, .12)
+        synGroups["L4 Rec."] = connectLayers(layer_4, layer_4, .24)
+        synGroups["L5/6 Rec."] = connectLayers(layer_56, layer_56, .24)
+
         // Strong forward connections - Layer 4 is the main input that drives other layers
-        synGroups["L4 \u2192 L2/3"] = connectLayers(layer_4, layer_23, .14, Triple(0.4, 200.0, 100.0))  // Strong
-        synGroups["L4 \u2192 L5/6"] = connectLayers(layer_4, layer_56, .08, Triple(0.4, 200.0, 100.0))  // Strong
-        synGroups["L2/3 \u2192 L5/6"] = connectLayers(layer_23, layer_56, .08, Triple(0.35, 250.0, 80.0))  // Strong
+        synGroups["L4 \u2192 L2/3"] = connectLayers(layer_4, layer_23, .14)  // Strong
+        synGroups["L4 \u2192 L5/6"] = connectLayers(layer_4, layer_56, .08)  // Strong
+        synGroups["L2/3 \u2192 L5/6"] = connectLayers(layer_23, layer_56, .08)  // Strong
         
         // Weak feedback connections - minimal influence
-        synGroups["L2/3 \u2192 L4"] = connectLayers(layer_23, layer_4, .01, Triple(0.1, 1000.0, 10.0))  // Weak
-        synGroups["L5/6 \u2192 L4"] = connectLayers(layer_56, layer_4, .007, Triple(0.1, 1000.0, 10.0))  // Weak
-        synGroups["L5/6 \u2192 L2/3"] = connectLayers(layer_56, layer_23, .03, Triple(0.1, 1000.0, 10.0))  // Weak
+        synGroups["L2/3 \u2192 L4"] = connectLayers(layer_23, layer_4, .01)  // Weak
+        synGroups["L5/6 \u2192 L4"] = connectLayers(layer_56, layer_4, .007)  // Weak
+        synGroups["L5/6 \u2192 L2/3"] = connectLayers(layer_56, layer_23, .03)  // Weak
+
         for (sgn in synGroups.keys) {
             val sg = synGroups[sgn]
             for (s in sg!!.synapses) {
@@ -234,16 +248,9 @@ val cortexLayers = newSim {
         ## Explore Layer Dynamics
 
         1. Click `Run` to start the simulation.
-        2. Observe how spikes propagate from Layer 4 (main sensory input) to Layers 2/3 and 5/6.
-        3. Modify synaptic sparsity or strengths by adjusting parameters in the code to see effects on network dynamics.
-        4. Watch how recurrent connections within layers sustain or dampen activity.
-        5. Inject current or perturb neurons to simulate sensory input and observe activity patterns.
-
-        ## Experimental Ideas
-
-        - Alter the ratio of excitatory to inhibitory neurons and note the impact on firing patterns.
-        - Change short-term plasticity parameters to simulate different synaptic dynamics.
-        - Visualize synaptic delays to understand the timing of signal propagation across layers.
+        2. Use the node activation tool to inject activation into the  “output” layer 5/6. Few spikes in the other layers should be observed.
+        3.  Use the node activation tool to inject activation into layer 4. A burst of activity in 2/3 should then be observed, followed by a burst of activity in 5/6, consistent with known connectivity.
+        4.  Use the node activation tool to inject activation into layer 2/3. This should lead, after some delay, to activity in 5/6, and then to a burst of activity in layer 4.
 
         # References
 

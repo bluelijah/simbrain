@@ -1,5 +1,6 @@
 package org.simbrain.network.core
 
+import org.simbrain.network.gui.dialogs.NetworkPreferences
 import org.simbrain.network.gui.dialogs.NetworkPreferences.weightRandomizer
 import org.simbrain.network.gui.nodes.ActivationSequenceProcessor
 import org.simbrain.network.learningrules.StaticSynapseRule
@@ -281,10 +282,17 @@ class WeightMatrix(source: Layer, target: Layer) : Connector(source, target) {
         events.updated.fire()
     }
 
+    val sizeString get() = if (NetworkPreferences.weightMatrixTransposeGraphics) {
+        "${weights.ncol()} x ${weights.nrow()}"
+    } else {
+        "${weights.nrow()} x ${weights.ncol()}"
+    }
+
     override fun toString(): String {
-        return (id
-                + " (" + weights.nrow() + "x" + weights.ncol() + ") "
-                + "connecting " + source.id + " to " + target.id)
+        return """
+            Name: $displayName ($sizeString)
+            Source: ${source.id}
+            Target: ${target.id}""".trimIndent()
     }
 
     fun updateMasks() {

@@ -13,7 +13,7 @@ import org.simbrain.custom_sims.simulations.braitenberg.pursuer
 import org.simbrain.custom_sims.simulations.demos.competitiveSim
 import org.simbrain.custom_sims.simulations.edge_of_chaos.edgeOfChaos
 import org.simbrain.custom_sims.simulations.edge_of_chaos.edgeOfChaosBitStream
-import org.simbrain.custom_sims.simulations.neuroscience.cortexLayers
+import org.simbrain.custom_sims.simulations.neuroscience.corticalLayers
 import org.simbrain.custom_sims.simulations.neuroscience.spikingNetworkSimulation
 import org.simbrain.custom_sims.simulations.nlp.tinyLanguageModel
 import org.simbrain.custom_sims.simulations.patterns_of_activity.cogMap3Objects
@@ -82,9 +82,9 @@ val simulations = dir("Simulations", alphabetical = true ) {
 
     dir("Language models") {
         item("Basic word embeddings") { nlpSimBasic }
-        item("Next-word prediction") { srnElmanSentences }
+        item("Next-word prediction (SRN)") { srnElmanSentences }
         //item("Tiny language model") { tinyLanguageModelFF }
-        item("Tiny language model") { tinyLanguageModel }
+        item("Tiny language model (Transformer)") { tinyLanguageModel }
     }
 
     dir("Neuroscience") {
@@ -96,7 +96,7 @@ val simulations = dir("Simulations", alphabetical = true ) {
         // item("Hippocampus") { Hippocampus() }
         // item("Cerebellum") { Cerebellum() }
         item("Spiking Network") { spikingNetworkSimulation }
-        item("Cortical layers") { cortexLayers }
+        item("Cortical layers") { corticalLayers }
         //item("Cortical areas") { cortexKuramoto }
     }
 
@@ -140,13 +140,13 @@ val simulations = dir("Simulations", alphabetical = true ) {
     dir("Recurrent networks") {
         item("Recurrent net") { recurrentProjection }
         item("Recurrent net (array)") { recurrentNetArrayBased }
-        item("IAC Jets Sharks 5 People") { iacJetsSharks5People }
-        item("Spivey net") { spiveyNet }
+        item("IAC Jets Sharks 5 people") { iacJetsSharks5People }
+        item("Mouse and eye tracking") { spiveyNet }
     }
 
     dir("Reinforcement learning") {
-        item("Braitenberg RL") { braitenbergRL }
         item("Actor critic") { actorCritic }
+        item("Braitenberg RL") { braitenbergRL }
     }
 
     // dir("Other Demos") {

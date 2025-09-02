@@ -1,6 +1,5 @@
 package org.simbrain.custom_sims.simulations.nlp
 
-import kotlinx.coroutines.awaitAll
 import org.json.JSONObject
 import org.simbrain.custom_sims.*
 import org.simbrain.network.NetworkComponent
@@ -16,6 +15,7 @@ import org.simbrain.util.*
 import org.simbrain.util.propertyeditor.EditableObject
 import org.simbrain.util.propertyeditor.GuiEditable
 import org.simbrain.workspace.Workspace
+import org.simbrain.workspace.gui.SimbrainDesktop
 import org.simbrain.workspace.updater.UpdateAllCouplings
 import org.simbrain.world.textworld.EmbeddingType
 import org.simbrain.world.textworld.TextWorldComponent
@@ -25,12 +25,6 @@ import smile.math.matrix.Matrix
 import java.io.File
 
 class TinyLanguageModelOptions(var showEmbeddingDimension: Boolean = true): EditableObject {
-
-    var samplingStrategy: SamplingStrategy by GuiEditable(
-        initValue = SamplingStrategy.TopK(k = 5),
-        description = "How to sample from softmax to produce new tokens",
-        order = 0,
-    )
 
     var contextSize by GuiEditable(
         initValue = 24,
@@ -45,12 +39,24 @@ class TinyLanguageModelOptions(var showEmbeddingDimension: Boolean = true): Edit
         conditionallyVisibleBy = TinyLanguageModelOptions::showEmbeddingDimension
     )
 
+    var hiddenSize by GuiEditable(
+        initValue = 30,
+        description = "Number of hidden units in the transformer block",
+        order = 25,
+    )
+
     var trainerTextPath by GuiEditable(
         initValue = simulationsPath / "texts" / "casual_texting_small.txt",
         description = "Text used to train the model",
-        tab = "Text Parsing",
-        order = 10,
+        order = 30,
         useFileChooser = true,
+    )
+
+    var samplingStrategy: SamplingStrategy by GuiEditable(
+        initValue = SamplingStrategy.TopK(k = 5),
+        description = "How to sample from softmax to produce new tokens",
+        showDetails = false,
+        order = 40,
     )
 
     var tokenizer by GuiEditable(
@@ -96,6 +102,7 @@ val tinyLanguageModel = newSim("tiny_language_model") { optionString ->
         TinyLanguageModelOptions().apply {
             contextSize = jsonOptions.optInt("contextSize", contextSize)
             embeddingDimension = jsonOptions.optInt("embeddingDimension", embeddingDimension)
+            hiddenSize = jsonOptions.optInt("hiddenSize", hiddenSize)
             if (jsonOptions.has("textFile")) {
                 trainerTextPath = simulationsPath / "texts" / jsonOptions.getString("textFile")
             }
@@ -142,9 +149,8 @@ val tinyLanguageModel = newSim("tiny_language_model") { optionString ->
     val trainingSet = buildSequenceToSequenceDataset(tokenizedTrainingText, contextSize, tokenEmbedding)
 
     // Text World for Inputs
-    val textWorldComponent = addTextWorld("Text World (Inputs)")
+    val textWorldComponent = addTextWorld("Text Inputs")
     textWorldComponent.world.tokenEmbedding = tokenEmbedding
-    textWorldComponent.world.text = tokenizedTrainingText.take(contextSize).tokensToString(tokenizer)
     textWorldComponent.world.highlightCurrentToken = false
     textWorldComponent.world.autoAdvance = false
     textWorldComponent.world.samplingStrategy = options.samplingStrategy
@@ -154,7 +160,7 @@ val tinyLanguageModel = newSim("tiny_language_model") { optionString ->
         isClamped = true
     }
 
-    val transformerBlock = TransformerBlock(contextSize, options.embeddingDimension, options.embeddingDimension).apply {
+    val transformerBlock = TransformerBlock(contextSize, options.embeddingDimension, options.hiddenSize).apply {
         label = "Transformer Block"
     }
 
@@ -185,8 +191,8 @@ val tinyLanguageModel = newSim("tiny_language_model") { optionString ->
     )
 
     with(network) {
-        addNetworkModels(inputs, transformerBlock, softmaxSequence, inferenceOutput).awaitAll()
-        addNetworkModels(weightMatrices).awaitAll()
+        addNetworkModels(inputs, transformerBlock, softmaxSequence, inferenceOutput)
+        addNetworkModels(weightMatrices)
         val model = SupervisedModel(inputs, softmaxSequence) // Train on sequence, not single output
         model.initWeights()
         model.initBiases()
@@ -195,7 +201,7 @@ val tinyLanguageModel = newSim("tiny_language_model") { optionString ->
         model.trainerConfig.learningRate = learningRate
         model.trainerConfig.testConfiguration.enabled = false
         model.trainerConfig.optimizer = AdamOptimizer()
-        addNetworkModels(model).awaitAll()
+        addNetworkModels(model)
     }
 
     setupUpdateActions(workspace, options)
@@ -207,6 +213,17 @@ val tinyLanguageModel = newSim("tiny_language_model") { optionString ->
     withGui {
         place(textWorldComponent, 10, 10, 450, 350)
         place(networkComponent, 460, 10, 1000, 800)
+        val textWorldDesktopComponent = SimbrainDesktop.getDesktopComponent(textWorldComponent)
+        SimbrainDesktop.onboardingManager.showPopup(
+            PopupConfig(
+                title = "Language Model Prompt",
+                message = "To enter a prompt, add some text here. To process your prompt through the network, click the play button on the main toolbar.",
+                targetComponent = textWorldDesktopComponent as javax.swing.JComponent,
+                placement = PopupPlacement.BOTTOM_CENTER,
+                suppressionKey = "tiny_language_model_prompt_help",
+                style = PopupStyle.SUCCESS
+            )
+        )
     }
 
     offsetNetworkModel(inputs, transformerBlock, Direction.NORTH, transformerBlock.height / 2 + 300.0)
@@ -439,7 +456,7 @@ fun buildSequenceToSequenceDataset(
     tokenizedText: List<String>,
     contextSize: Int,
     tokenEmbedding: TokenEmbedding
-): MatrixDataset {
+): TrainingDataset {
 
     // Create sliding windows of contextSize + 1 for input + target
     val sequences = tokenizedText.windowed(contextSize + 1, step = 1)
@@ -486,8 +503,8 @@ fun buildSequenceToSequenceDataset(
         finalTargetMatrix.setRow(exampleIndex, targetMatrix.flatten())
     }
 
-    return MatrixDataset(
-        inputs = finalInputMatrix,
-        targets = finalTargetMatrix
+    return TrainingDataset(
+        inputs = finalInputMatrix.toArray().map { it.toMutableList() }.toMutableList(),
+        targets = finalTargetMatrix.toArray().map { it.toMutableList() }.toMutableList()
     )
 }

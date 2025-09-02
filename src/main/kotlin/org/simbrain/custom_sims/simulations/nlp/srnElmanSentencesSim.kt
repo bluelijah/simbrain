@@ -6,7 +6,7 @@ import org.simbrain.custom_sims.addNetworkComponent
 import org.simbrain.custom_sims.addTextWorld
 import org.simbrain.custom_sims.newSim
 import org.simbrain.network.subnetworks.SRNNetwork
-import org.simbrain.network.trainers.MatrixDataset
+import org.simbrain.network.trainers.TrainingDataset
 import org.simbrain.util.*
 import org.simbrain.world.textworld.EmbeddingType
 import org.simbrain.world.textworld.TokenEmbeddingBuilder
@@ -40,7 +40,7 @@ val srnElmanSentences = newSim {
     // Text World for Outputs
     val textWorldOut = addTextWorld("Text World (Outputs)").apply { updateOn = false }
     textWorldOut.world.showTokenBoundaries = false
-    textWorldOut.world.autoAdvance = false
+    textWorldOut.world.highlightCurrentToken = false
     TokenEmbeddingBuilder().build(text)
 
     // Network
@@ -51,7 +51,7 @@ val srnElmanSentences = newSim {
         150,
         textWorldInputs.world.tokenEmbedding.dimension,
         point(0,0))
-    network.addNetworkModel(srn)?.await()
+    network.addNetworkModel(srn)
 
     val trainingInputsTokens = makeElmanVector(numTrainingSentences)
         .tokenizeWordsFromString()
@@ -64,9 +64,9 @@ val srnElmanSentences = newSim {
     val trainingTargetTokens = trainingInputsTokens.drop(1)
     val trainingTarget = trainingInputs.shiftUpAndPadEndWithZero()
 
-    srn.trainingSet = MatrixDataset(
-        trainingInputs,
-        trainingTarget,
+    srn.trainingSet = TrainingDataset(
+        inputs = trainingInputs.toArray().map { it.toMutableList() }.toMutableList(),
+        targets = trainingTarget.toArray().map { it.toMutableList() }.toMutableList(),
         inputRowNames = trainingInputsTokens,
         inputColumnNames = textWorldInputs.world.tokenEmbedding.tokens,
         targetRowNames = trainingTargetTokens,
@@ -84,7 +84,7 @@ val srnElmanSentences = newSim {
 
     withGui {
         place(textWorldInputs, 0, 7, 531, 929)
-        place(textWorldOut, 523, 7, 516, 930)
+        place(textWorldOut, 523, 7, 516, 250)
         place(networkComponent, 1046, 10, 500, 550)
     }
 
@@ -109,15 +109,10 @@ val srnElmanSentences = newSim {
         val chosenWords = choices.map { (index, _) -> tokenEmbedding.tokens[index] }
         val chosenProbs = choices.map { (_, d) -> d / totalActivations }
         val chosen = chosenWords.zip(chosenProbs).joinToString(" ") { (word, prob) -> "$word (${prob.format(3)})" }
-        textWorldOut.world.addTextAtEnd(
-            """
-                |Current Word: ${textWorldInputs.world.currentToken}
-                |Predicted Next Words: $chosen
-                |
-                |
-            """.trimMargin("|"),
-            ""
-        )
+        textWorldOut.world.text = """
+            Current Word: ${textWorldInputs.world.currentToken}
+            Predicted Next Words: $chosen
+        """.trimIndent()
     }
 
     workspace.launch {

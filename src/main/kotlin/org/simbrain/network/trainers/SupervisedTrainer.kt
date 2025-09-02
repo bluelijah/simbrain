@@ -4,12 +4,14 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import org.simbrain.network.core.*
 import org.simbrain.network.events.TrainerEvents
+import org.simbrain.network.events.TrainingStats
 import org.simbrain.network.trainers.SupervisedTrainer.*
+import org.simbrain.network.updaterules.SoftmaxRule
 import org.simbrain.util.UserParameter
 import org.simbrain.util.propertyeditor.CopyableObject
 import org.simbrain.util.propertyeditor.EditableObject
 import org.simbrain.util.propertyeditor.GuiEditable
-import org.simbrain.util.rowVectorTransposed
+import org.simbrain.util.toColumnVector
 import smile.math.matrix.Matrix
 import kotlin.random.Random
 import kotlin.reflect.KFunction
@@ -52,6 +54,20 @@ open class SupervisedTrainerConfig(lossFunctionProvider: KFunction<List<Class<ou
         order = 60
     )
 
+    @UserParameter(
+        label = "Compute Accuracy",
+        description = "Calculate and display classification accuracy for softmax networks",
+        order = 70
+    )
+    var computeAccuracy by GuiEditable(
+        initValue = false,
+        description = "Calculate and display classification accuracy for softmax networks",
+        onUpdate = {
+            showWidget(widgetValue(::lossFunction) == BackpropLossFunction.CrossEntropy)
+        },
+        order = 70
+    )
+
     override val name = "Optimizer Properties"
 
     var learningRate by optimizer::learningRate
@@ -63,6 +79,7 @@ open class SupervisedTrainerConfig(lossFunctionProvider: KFunction<List<Class<ou
         it.weightInitializationStrategy = weightInitializationStrategy.copy()
         it.stoppingCondition = stoppingCondition.copy()
         it.testConfiguration = testConfiguration.copy()
+        it.computeAccuracy = computeAccuracy
     }
 
     override fun copy() = copyCurrentInto(SupervisedTrainerConfig())
@@ -73,7 +90,7 @@ open class SupervisedTrainerConfig(lossFunctionProvider: KFunction<List<Class<ou
  */
 class SupervisedTrainer(val network: Network, val supervisedNetwork: SupervisedNetwork) : CoroutineScope {
 
-    private var job = SupervisorJob()
+    val job = SupervisorJob()
 
     override val coroutineContext = Dispatchers.Default + job
 
@@ -92,6 +109,22 @@ class SupervisedTrainer(val network: Network, val supervisedNetwork: SupervisedN
      * Used when reopening the trainer controls so user knows where things left off
      */
     var lastTrainingError = 0.0
+
+    /**
+     * Last training accuracy (only available for softmax networks)
+     */
+    var lastTrainingAccuracy: Double? = null
+
+    /**
+     * Last testing accuracy (only available for softmax networks)
+     */
+    var lastTestingAccuracy: Double? = null
+
+    /**
+     * Accumulator for batch accuracy calculation (avoids recomputing forward passes)
+     */
+    private var batchAccuracySum = 0.0
+    private var batchSampleCount = 0
 
     var isRunning = false
 
@@ -158,9 +191,14 @@ class SupervisedTrainer(val network: Network, val supervisedNetwork: SupervisedN
 
     private suspend fun trainOnceHandler() {
         iteration++
+        
+        // Reset batch accuracy accumulators
+        batchAccuracySum = 0.0
+        batchSampleCount = 0
+        
         with(config.updateType) {
             lastTrainingError = when (this) {
-                is UpdateMethod.Stochastic -> trainRow(Random.nextInt(supervisedNetwork.trainingSet.inputs.nrow()))
+                is UpdateMethod.Stochastic -> trainRow(Random.nextInt(supervisedNetwork.trainingSet.size))
                 is UpdateMethod.Epoch -> trainBatch(0 until supervisedNetwork.trainingSet.size)
                 is UpdateMethod.Batch -> {
                     val startIndex = Random.nextInt(0, supervisedNetwork.trainingSet.size - batchSize + 1)
@@ -169,12 +207,38 @@ class SupervisedTrainer(val network: Network, val supervisedNetwork: SupervisedN
                 }
             }
         }
-        val testError = if (config.testConfiguration.enabled && iteration % config.testConfiguration.testFrequency == 1) {
+        
+        // Use accumulated accuracy from batch training (much faster!)
+        lastTrainingAccuracy = if (config.computeAccuracy && batchSampleCount > 0) {
+            batchAccuracySum / batchSampleCount
+        } else {
+            null
+        }
+        
+        val shouldComputeTest = config.testConfiguration.enabled && supervisedNetwork.testingSet.size > 0 && 
+                                iteration % config.testConfiguration.testFrequency == 0
+        
+        val testError = if (shouldComputeTest) {
             computeTestError()
         } else {
             null
         }
-        events.errorUpdated.fire(lastTrainingError to testError).await()
+        
+        // Compute test accuracy when test error is computed and accuracy is enabled
+        val testAccuracy = if (shouldComputeTest && config.computeAccuracy) {
+            lastTestingAccuracy = computeTestAccuracy()
+            lastTestingAccuracy
+        } else {
+            null
+        }
+        
+        val trainingStats = TrainingStats(
+            trainingError = lastTrainingError,
+            testingError = testError,
+            trainingAccuracy = lastTrainingAccuracy,
+            testingAccuracy = testAccuracy
+        )
+        events.errorUpdated.fire(trainingStats).await()
         if (isRunning) {
             if (config.stoppingCondition.validate(iteration, lastTrainingError)) {
                 stoppingConditionReached = true
@@ -209,12 +273,12 @@ class SupervisedTrainer(val network: Network, val supervisedNetwork: SupervisedN
         val error = with(supervisedNetwork) {
             rowRange.sumOf { rowNum ->
                 val rowProbeContext = probeContext?.createMapProbe("trainRow-$rowNum")
-                inputLayer.setActivations(trainingSet.inputs.row(rowNum))
+                inputLayer.setActivations(trainingSet.inputs[rowNum].toDoubleArray())
                 
                 // Handle target reshaping for ActivationSequence outputs
                 val targetVec = if (outputLayer is ActivationSequence) {
                     // Reshape flattened target back to sequence format
-                    val flatTarget = trainingSet.targets.row(rowNum)
+                    val flatTarget = trainingSet.targets[rowNum].toDoubleArray()
                     val sequenceLayer = outputLayer as ActivationSequence
                     val sequenceSize = sequenceLayer.sequenceSize
                     val vocabSize = sequenceLayer.size
@@ -229,12 +293,19 @@ class SupervisedTrainer(val network: Network, val supervisedNetwork: SupervisedN
                     }
                     reshapedTarget
                 } else {
-                    trainingSet.targets.rowVectorTransposed(rowNum)
+                    trainingSet.targets[rowNum].toDoubleArray().toColumnVector()
                 }
                 
                 with(network) {
                     forwardPass()
                     rowProbeContext?.write("forwardPassOutputActivations", outputLayer.activations.clone())
+                    
+                    // Accumulate accuracy during training (reuse forward pass results)
+                    if (config.computeAccuracy && isSoftmaxNetwork() && config.lossFunction is BackpropLossFunction.CrossEntropy) {
+                        batchAccuracySum += BackpropLossFunction.CrossEntropy.accuracy(outputLayer.activations, targetVec)
+                        batchSampleCount++
+                    }
+                    
                     supervisedNetwork.layers.accumulateBackprop(
                         listOf(inputLayer),
                         targetVec,
@@ -311,7 +382,7 @@ class SupervisedTrainer(val network: Network, val supervisedNetwork: SupervisedN
      */
     open suspend fun computeTestError(): Double {
         return supervisedNetwork.testingSet.sumOf { (input, target) ->
-            supervisedNetwork.inputLayer.activations = input
+            supervisedNetwork.inputLayer.activations = input.toDoubleArray().toColumnVector()
             with(network) { supervisedNetwork.forwardPass() }
             val output = supervisedNetwork.outputLayer.activations
             
@@ -327,22 +398,68 @@ class SupervisedTrainer(val network: Network, val supervisedNetwork: SupervisedN
                 for (seqPos in 0 until sequenceSize) {
                     for (vocabPos in 0 until vocabSize) {
                         val flatIndex = seqPos * vocabSize + vocabPos
-                        reshapedTarget[seqPos, vocabPos] = target[flatIndex, 0]
+                        reshapedTarget[seqPos, vocabPos] = target[flatIndex]
                     }
                 }
                 reshapedTarget
             } else {
-                target
+                target.toDoubleArray().toColumnVector()
             }
             
             config.lossFunction.scalarLoss(output, reshapedTarget)
         } / supervisedNetwork.testingSet.size
     }
 
+    /**
+     * Compute the accuracy on the testing set
+     */
+    open suspend fun computeTestAccuracy(): Double {
+        if (!isSoftmaxNetwork() || config.lossFunction !is BackpropLossFunction.CrossEntropy) {
+            return 0.0
+        }
+
+        return supervisedNetwork.testingSet.sumOf { (input, target) ->
+            supervisedNetwork.inputLayer.activations = input.toDoubleArray().toColumnVector()
+            with(network) { supervisedNetwork.forwardPass() }
+            val output = supervisedNetwork.outputLayer.activations
+            
+            // Handle target reshaping for ActivationSequence outputs
+            val reshapedTarget = if (supervisedNetwork.outputLayer is ActivationSequence) {
+                // Reshape flattened target back to sequence format
+                val sequenceLayer = supervisedNetwork.outputLayer as ActivationSequence
+                val sequenceSize = sequenceLayer.sequenceSize
+                val vocabSize = sequenceLayer.size
+                
+                // Reshape from (sequenceSize * vocabSize, 1) to (sequenceSize, vocabSize)
+                val reshapedTarget = Matrix(sequenceSize, vocabSize)
+                for (seqPos in 0 until sequenceSize) {
+                    for (vocabPos in 0 until vocabSize) {
+                        val flatIndex = seqPos * vocabSize + vocabPos
+                        reshapedTarget[seqPos, vocabPos] = target[flatIndex]
+                    }
+                }
+                reshapedTarget
+            } else {
+                target.toDoubleArray().toColumnVector()
+            }
+            
+            BackpropLossFunction.CrossEntropy.accuracy(output, reshapedTarget)
+        } / supervisedNetwork.testingSet.size
+    }
+
+    /**
+     * Check if the supervised network uses softmax activation
+     */
+    private fun isSoftmaxNetwork(): Boolean {
+        return (supervisedNetwork.outputLayer as? NeuronArray)?.updateRule is SoftmaxRule
+    }
+
+
+
     sealed class UpdateMethod: CopyableObject {
         class Stochastic : UpdateMethod() {
             override fun copy() = this
-            override fun toString() = "Batch = 1"
+            override fun toString() = "Stochastic"
         }
 
         class Epoch : UpdateMethod() {
@@ -352,7 +469,7 @@ class SupervisedTrainer(val network: Network, val supervisedNetwork: SupervisedN
 
         class Batch(@UserParameter(label = "Batch Size", minimumValue = 1.0, order = 1) var batchSize: Int = 5) : UpdateMethod() {
             override fun copy() = Batch(batchSize)
-            override fun toString() = "Batch = $batchSize"
+            override fun toString() = "Batch"
         }
 
         override fun getTypeList(): List<Class<out CopyableObject>>? {

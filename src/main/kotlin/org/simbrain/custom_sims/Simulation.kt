@@ -5,8 +5,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.simbrain.docviewer.DocViewerComponent
 import org.simbrain.network.NetworkComponent
-import org.simbrain.network.desktop.NetworkDesktopComponent
 import org.simbrain.network.core.Network
+import org.simbrain.network.desktop.NetworkDesktopComponent
 import org.simbrain.network.gui.NetworkPanel
 import org.simbrain.plot.projection.ProjectionComponent
 import org.simbrain.plot.rasterchart.RasterPlotComponent
@@ -15,12 +15,14 @@ import org.simbrain.plot.timeseries.TimeSeriesPlotComponent
 import org.simbrain.util.*
 import org.simbrain.workspace.Workspace
 import org.simbrain.workspace.WorkspaceComponent
+import org.simbrain.workspace.WorkspacePreferences
 import org.simbrain.workspace.gui.SimbrainDesktop
 import org.simbrain.world.dataworld.DataWorld
 import org.simbrain.world.dataworld.DataWorldComponent
 import org.simbrain.world.imageworld.ImageWorldComponent
 import org.simbrain.world.odorworld.OdorWorldComponent
 import org.simbrain.world.odorworld.OdorWorldDesktopComponent
+import org.simbrain.world.odorworld.OdorWorldPanel
 import org.simbrain.world.textworld.TextWorldComponent
 import java.io.File
 
@@ -209,7 +211,7 @@ fun SimulationScope.addDocViewerFromFile(title: String, fileName: String): DocVi
     return docViewerComponent
 }
 
-suspend fun SimulationScope.addSidebarInfoFromFile(fileName: String, initiallyOpened: Boolean = true) {
+suspend fun SimulationScope.addSidebarInfoFromFile(fileName: String, initiallyOpened: Boolean = WorkspacePreferences.showSimulationInfoByDefault) {
     workspace.infoDoc.text =  ResourceManager.readFileContents(
         "custom_sims" + Utils.FS + fileName
     )
@@ -234,7 +236,7 @@ fun SimulationScope.addDocViewer(title: String, markdownText: String): DocViewer
     return docViewerComponent
 }
 
-suspend fun SimulationScope.addSidebarInfo(markdownText: String, width: Int? = null, initiallyOpened: Boolean = false) {
+suspend fun SimulationScope.addSidebarInfo(markdownText: String, width: Int? = null, initiallyOpened: Boolean = WorkspacePreferences.showSimulationInfoByDefault) {
     workspace.infoDoc.text = markdownText
     workspace.infoDoc.render()
     withGui {
@@ -269,5 +271,11 @@ context(SimbrainDesktop)
 suspend fun getNetworkPanel(component: NetworkComponent): NetworkPanel {
     val desktopComponent = getDesktopComponent(component) as NetworkDesktopComponent
     return desktopComponent.networkPanel
+}
+
+context(SimbrainDesktop)
+suspend fun getOdorWorldPanel(component: OdorWorldComponent): OdorWorldPanel {
+    val desktopComponent = getDesktopComponent(component) as OdorWorldDesktopComponent
+    return desktopComponent.worldPanel
 }
 

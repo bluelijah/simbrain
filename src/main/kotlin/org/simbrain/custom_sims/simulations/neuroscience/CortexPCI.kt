@@ -14,6 +14,8 @@ import kotlin.math.roundToInt
 
 /**
  * Create a simulation of Cortex...
+ *
+ * See https://bmcneurosci.biomedcentral.com/articles/10.1186/s12868-015-0193-z
  */
 val cortexKuramoto = newSim {
 
@@ -94,13 +96,13 @@ val cortexKuramoto = newSim {
 
         if (difference > 0) {
             do {
-                randomIndex = kotlin.random.Random.nextInt(numNodesListAdjusted.size);                                  // https://www.baeldung.com/kotlin/list-get-random-item
+                randomIndex = kotlin.random.Random.nextInt(numNodesListAdjusted.size)                                  // https://www.baeldung.com/kotlin/list-get-random-item
                 randomValue = numNodesListAdjusted[randomIndex]
             }
             while (numNodesUpperBound - randomValue < difference)
         } else if (difference < 0) {
             do {
-                randomIndex = kotlin.random.Random.nextInt(numNodesListAdjusted.size);                                  // DRY
+                randomIndex = kotlin.random.Random.nextInt(numNodesListAdjusted.size)                                  // DRY
                 randomValue = numNodesListAdjusted[randomIndex]
             }
             while (randomValue - numNodesLowerBound < abs(difference))
@@ -116,7 +118,7 @@ val cortexKuramoto = newSim {
         val regionNeurons = network.addNeurons(numNodesListAdjusted[i - 1]) { kuramotoTemplate() }
         val region = NeuronCollection(regionNeurons)
 
-        network.addNetworkModel(region)?.await()
+        network.addNetworkModel(region)
         neuronRegionList.add(region)
 
         // Increment GUI row after 3 neuron regions have been displayed

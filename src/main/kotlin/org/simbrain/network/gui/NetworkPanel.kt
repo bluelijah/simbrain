@@ -38,6 +38,7 @@ import java.awt.geom.Point2D
 import java.awt.geom.Rectangle2D
 import java.util.prefs.PreferenceChangeListener
 import javax.swing.JPanel
+import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.reflect.KClass
 
@@ -694,19 +695,28 @@ class NetworkPanel(val networkComponent: NetworkComponent) : JPanel(), Coroutine
         val targets = filterSelectedModels(Layer::class.java)
         if (sources.isNotEmpty() && targets.isNotEmpty()) {
             // TODO: Ability to set defaults for weight matrix that is added
-            val addedMatrices = sources.cartesianProduct(targets).mapNotNull { (s, t) ->
-                WeightMatrix(s, t)
-            }
-            network.addNetworkModels(addedMatrices)
-            undoManager.addUndoableAction(
-                description = "Connect layers",
-                undo = { addedMatrices.forEach {it.delete()}},
-                redo = {
-                    network.addNetworkModels(addedMatrices, usePlacementManager = false, useAutoAssignedId = false)
-                        .awaitAll()
-                    addedMatrices.forEach { it.afterRestore() }
+            val addedMatrices = sources.cartesianProduct(targets)
+                .filter { (s, t) ->
+                    // Skip if WeightMatrix already exists between source and target
+                    s.outgoingConnectors.none { connector ->
+                        connector is WeightMatrix && connector.target == t
+                    }
                 }
-            )
+                .map { (s, t) ->
+                    WeightMatrix(s, t)
+                }
+            if (addedMatrices.isNotEmpty()) {
+                network.addNetworkModelsAsync(addedMatrices)
+                undoManager.addUndoableAction(
+                    description = "Connect layers",
+                    undo = { addedMatrices.forEach {it.delete()}},
+                    redo = {
+                        network.addNetworkModelsAsync(addedMatrices, usePlacementManager = false, useAutoAssignedId = false)
+                            .awaitAll()
+                        addedMatrices.forEach { it.afterRestore() }
+                    }
+                )
+            }
             return true
         }
         return false
@@ -720,25 +730,34 @@ class NetworkPanel(val networkComponent: NetworkComponent) : JPanel(), Coroutine
     fun NetworkSelectionManager.connectNeuronGroups(): List<SynapseGroup> {
         val sourceCollections = filterSelectedSourceModels(AbstractNeuronCollection::class.java)
         val targetCollections = filterSelectedModels(AbstractNeuronCollection::class.java)
-        val synapseGroups = (sourceCollections cartesianProduct targetCollections).map { (src, tar) ->
-            SynapseGroup(src, tar).also { network.addNetworkModel(it) }
-        }
+        val synapseGroups = (sourceCollections cartesianProduct targetCollections)
+            .filter { (src, tar) ->
+                // Skip if SynapseGroup already exists between source and target
+                src.outgoingSg.none { synapseGroup ->
+                    synapseGroup.target == tar
+                }
+            }
+            .map { (src, tar) ->
+                SynapseGroup(src, tar).also { network.addNetworkModelAsync(it) }
+            }
 
         val synapseGroupSynapses = synapseGroups.associateWith { it.synapses.toList() }
 
-        undoManager.addUndoableAction(
-            description = "Connect neuron groups",
-            undo = { synapseGroups.map { launch { it.delete() } }.joinAll() },
-            redo = {
-                synapseGroupSynapses.entries.map { (sg, synapses) ->
-                    launch {
-                        sg.synapses.clear()
-                        sg.synapses.addAll(synapses)
-                        network.addNetworkModel(sg, usePlacementManager = false, useAutoAssignedId = false)?.await()
-                        sg.afterRestore()
-                    }
-                }.joinAll()
-            })
+        if (synapseGroups.isNotEmpty()) {
+            undoManager.addUndoableAction(
+                description = "Connect neuron groups",
+                undo = { synapseGroups.map { launch { it.delete() } }.joinAll() },
+                redo = {
+                    synapseGroupSynapses.entries.map { (sg, synapses) ->
+                        launch {
+                            sg.synapses.clear()
+                            sg.synapses.addAll(synapses)
+                            network.addNetworkModel(sg, usePlacementManager = false, useAutoAssignedId = false)
+                            sg.afterRestore()
+                        }
+                    }.joinAll()
+                })
+        }
 
         return synapseGroups
     }
@@ -860,7 +879,10 @@ class NetworkPanel(val networkComponent: NetworkComponent) : JPanel(), Coroutine
                 override fun mouseWheelRotated(event: PInputEvent) {
                     val swingEvent = (event.sourceSwingEvent as MouseWheelEvent)
                     val newScale = 1.1.pow(swingEvent.preciseWheelRotation)
-                    autoZoom = false
+                    // Only turn off autozoom if the mouse wheel is turned more than a few clicks.
+                    if (abs(swingEvent.preciseWheelRotation) > 2) {
+                        autoZoom = false
+                    }
                     scale(1 / newScale)
                 }
             })
@@ -896,7 +918,7 @@ class NetworkPanel(val networkComponent: NetworkComponent) : JPanel(), Coroutine
             undoManager.addUndoableAction(
                 description = "Add $numNeurons neuron(s)",
                 undo = { neurons.forEach{it.delete()} },
-                redo = { network.addNetworkModels(neurons, usePlacementManager = false, useAutoAssignedId = false).awaitAll() }
+                redo = { network.addNetworkModels(neurons, usePlacementManager = false, useAutoAssignedId = false) }
             )
         }
     }
@@ -911,7 +933,7 @@ class NetworkPanel(val networkComponent: NetworkComponent) : JPanel(), Coroutine
             val neurons = network.addNeurons(numNeurons) { updateRule = template.updateRule }
             val ng = NeuronGroup(neurons)
             ng.layout = layout
-            network.addNetworkModel(ng)
+            network.addNetworkModelAsync(ng)
             ng.applyLayout()
             if (label.isNotEmpty()) {
                 ng.label = label

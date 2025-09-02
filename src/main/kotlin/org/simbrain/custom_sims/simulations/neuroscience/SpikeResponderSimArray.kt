@@ -41,7 +41,7 @@ val spikeResponderSimArray = newSim {
     }
     val weightsInput = WeightMatrix(input, spiking)
     network.addNetworkModels(input, spiking, weightsInput)
-    offsetNetworkModel(input, spiking, Direction.EAST, 300.0)
+    offsetNetworkModel(input, spiking, Direction.EAST, 400.0)
 
     val stepResponder = NeuronArray(arraySize).apply {
         label = "Step Responder"
@@ -50,8 +50,8 @@ val spikeResponderSimArray = newSim {
         spikeResponder = StepResponder()
     }
     network.addNetworkModels(stepResponder, weightsStep, usePlacementManager = false)
-    offsetNetworkModel(spiking, stepResponder, Direction.EAST, 400.0)
-    offsetNetworkModel(spiking, stepResponder, Direction.NORTH, 300.0)
+    offsetNetworkModel(spiking, stepResponder, Direction.EAST, 600.0)
+    offsetNetworkModel(spiking, stepResponder, Direction.NORTH, 400.0)
 
     val jumpAndDecay = NeuronArray(arraySize).apply {
         label = "Jump and Decay"
@@ -61,7 +61,7 @@ val spikeResponderSimArray = newSim {
     }
     network.addNetworkModels(jumpAndDecay, weightsJump, usePlacementManager = false)
     alignNetworkModels(stepResponder, jumpAndDecay, Alignment.VERTICAL)
-    offsetNetworkModel(stepResponder, jumpAndDecay, Direction.SOUTH, 200.0)
+    offsetNetworkModel(stepResponder, jumpAndDecay, Direction.SOUTH, 400.0)
 
     val riseAndDecay = NeuronArray(arraySize).apply {
         label = "Rise and Decay"
@@ -71,7 +71,7 @@ val spikeResponderSimArray = newSim {
     }
     network.addNetworkModels(riseAndDecay, weightsRise, usePlacementManager = false)
     alignNetworkModels(stepResponder, riseAndDecay, Alignment.VERTICAL)
-    offsetNetworkModel(jumpAndDecay, riseAndDecay, Direction.SOUTH, 200.0)
+    offsetNetworkModel(jumpAndDecay, riseAndDecay, Direction.SOUTH, 300.0)
 
     val stp = NeuronArray(arraySize).apply {
         label = "Short Term Plasticity"
@@ -81,7 +81,7 @@ val spikeResponderSimArray = newSim {
     }
     network.addNetworkModels(stp, weightsSTP, usePlacementManager = false)
     alignNetworkModels(stepResponder, stp, Alignment.VERTICAL)
-    offsetNetworkModel(riseAndDecay, stp, Direction.SOUTH, 200.0)
+    offsetNetworkModel(riseAndDecay, stp, Direction.SOUTH, 300.0)
 
     val spikePlot = addTimeSeriesComponent("Izhikevich", "Membrane Potentials")
     withGui {

@@ -58,6 +58,11 @@ object SimbrainDesktop {
     val frame: JFrame = JFrame(FRAME_TITLE)
 
     /**
+     * Manager for onboarding popups
+     */
+    val onboardingManager = OnboardingPopupManager(frame)
+
+    /**
      * Associates workspace components with their corresponding desktop components.
      */
     private val workspaceComponentDesktopComponentMap = CompletableDeferredHashMap<WorkspaceComponent, DesktopComponent<*>>()
@@ -98,10 +103,9 @@ object SimbrainDesktop {
      */
     private var contextMenu: JPopupMenu? = null
 
-    /**
-     * Workspace toolbar.
-     */
-    private var wsToolBar = JToolBar()
+    var wsToolBar = JToolBar()
+
+    lateinit var infoDockButton: AbstractButton
 
     val screenSize = Toolkit.getDefaultToolkit().screenSize
 
@@ -115,7 +119,27 @@ object SimbrainDesktop {
         },
         orientation = JSplitPane.HORIZONTAL_SPLIT,
         defaultSize = (screenSize.width * .2).toInt()
-    )
+    ).apply {
+        // Add listener for when the info dock becomes visible to show onboarding popup
+        dockComponent.addComponentListener(object : ComponentAdapter() {
+            override fun componentShown(e: ComponentEvent?) {
+                swingInvokeLater {
+                    onboardingManager.showPopup(
+                        PopupConfig(
+                            title = "Info Panel Toggle",
+                            message = "Use this button to toggle the visibility of this info screen. The info panel shows documentation and help content for various features.",
+                            targetComponent = infoDockButton,
+                            placement = PopupPlacement.BOTTOM_CENTER,
+                            suppressionKey = "info_dock_help",
+                            style = PopupStyle.INFO
+                        )
+                    )
+
+                }
+
+            }
+        })
+    }
 
     val bottomDockSplitter = SimbrainDesktopDock(
         mainComponent = sideDockSplitter,
@@ -134,6 +158,10 @@ object SimbrainDesktop {
             if (dockComponent.isVisible) {
                 WorkspacePreferences.bottomDockSize = dividerLocation
             }
+        }
+        // Show dock based on preference
+        if (WorkspacePreferences.showBottomDockByDefault) {
+            showDock()
         }
     }
 
@@ -475,7 +503,7 @@ object SimbrainDesktop {
         // Toggle docks
         bar.addSeparator()
         bar.add(actionManager.toggleBottomDock)
-        bar.add(actionManager.toggleInfoDock)
+        infoDockButton = bar.add(actionManager.toggleInfoDock)
 
         // Initialize time label
         timeLabel.border = BorderFactory.createEmptyBorder(0, 10, 0, 10)
@@ -538,12 +566,20 @@ object SimbrainDesktop {
         fileMenu.addSeparator()
         fileMenu.add(actionManager.showUpdaterDialog)
         fileMenu.addSeparator()
+        fileMenu.add(actionManager.showWorkspacePreferencesAction)
+        fileMenu.add(actionManager.showNetworkPreferencesAction)
+        fileMenu.addSeparator()
+        fileMenu.add(actionManager.resetOnboardingWindows)
+        fileMenu.addSeparator()
         fileMenu.add(actionManager.quitWorkspaceAction)
         return fileMenu
     }
 
     private fun createViewMenu(): JMenu {
         val viewMenu = JMenu("View")
+        viewMenu.add(JMenuItem(actionManager.toggleBottomDock))
+        viewMenu.add(JMenuItem(actionManager.toggleInfoDock))
+        viewMenu.addSeparator()
         viewMenu.add(JMenuItem(actionManager.resizeAllWindowsAction))
         viewMenu.add(JMenuItem(actionManager.repositionAllWindowsAction))
         return viewMenu
@@ -580,6 +616,8 @@ object SimbrainDesktop {
     private fun createHelpMenu(): JMenu {
         val helpMenu = JMenu("Help")
         helpMenu.add(ShowHelpAction("Main Help", "https://docs.simbrain.net/"))
+        helpMenu.addSeparator()
+        helpMenu.add(actionManager.toggleInfoDock)
         helpMenu.addSeparator()
         helpMenu.add(ShowHelpAction("Quick start and shortcuts", "https://docs.simbrain.net/docs/quickstart.html"))
         helpMenu.add(ShowHelpAction("Credits", "https://simbrain.net/SimbrainCredits.html"))

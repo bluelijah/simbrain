@@ -1,15 +1,13 @@
 package org.simbrain.custom_sims.simulations.backprop
 
-import kotlinx.coroutines.awaitAll
 import org.simbrain.custom_sims.addNetworkComponent
 import org.simbrain.custom_sims.newSim
 import org.simbrain.network.core.ActivationSequence
 import org.simbrain.network.core.NeuronArray
 import org.simbrain.network.core.WeightMatrix
-import org.simbrain.network.trainers.MatrixDataset
 import org.simbrain.network.trainers.SupervisedModel
+import org.simbrain.network.trainers.TrainingDataset
 import org.simbrain.util.point
-import org.simbrain.util.toMatrix
 
 val activationSequenceTwoLayer = newSim {
 
@@ -37,22 +35,21 @@ val activationSequenceTwoLayer = newSim {
         trainerConfig.testConfiguration.enabled = false
     }
 
-    network.addNetworkModels(inputs, output, wm1, model).awaitAll()
+    network.addNetworkModels(inputs, output, wm1, model)
     output.location = point(100, 100)
     inputs.location = point(100, 500)
 
-    val inputData = arrayOf(
-        doubleArrayOf(1.0, 0.0, 1.0, 0.0, 1.0, 0.0),
-        doubleArrayOf(0.0, 1.0, 0.0, 0.0, 1.0, 0.0),
+    val inputData = mutableListOf(
+        mutableListOf(1.0, 0.0, 1.0, 0.0, 1.0, 0.0),
+        mutableListOf(0.0, 1.0, 0.0, 0.0, 1.0, 0.0),
+    )
 
-    ).toMatrix()
+    val targetData = mutableListOf(
+        mutableListOf(1.0, 1.0, 1.0),
+        mutableListOf(0.0, 2.0, 0.0)
+    )
 
-    val targetData = arrayOf(
-        doubleArrayOf(1.0, 1.0, 1.0),
-        doubleArrayOf(0.0, 2.0, 0.0)
-    ).toMatrix()
-
-    model.trainingSet = MatrixDataset(
+    model.trainingSet = TrainingDataset(
         inputs = inputData,
         targets = targetData
     )

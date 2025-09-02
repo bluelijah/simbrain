@@ -30,9 +30,6 @@ class SupervisedModelNode(networkPanel: NetworkPanel, val supervisedModel: Super
      */
     private val outlinedObjects: MutableSet<ScreenElement> = LinkedHashSet()
 
-    override val toolTipText: String
-        get() = "Double click here to train..."
-
     public override fun layoutChildren() {
         updateOutline()
         interactionBox.centerFullBoundsOnPoint(
@@ -79,6 +76,15 @@ class SupervisedModelNode(networkPanel: NetworkPanel, val supervisedModel: Super
             add(createEditAction("Edit / Train..."))
             add(renameAction)
             add(removeAction)
+            addSeparator()
+            add(createAction("Add Current Data to Training Set") {
+                supervisedModel.trainingSet.inputs.add(supervisedModel.inputLayer.activationArray.toMutableList())
+                supervisedModel.trainingSet.targets.add(supervisedModel.outputLayer.activationArray.toMutableList())
+            })
+            add(createAction("Add Current Data to Testing Set") {
+                supervisedModel.testingSet.inputs.add(supervisedModel.inputLayer.activationArray.toMutableList())
+                supervisedModel.testingSet.targets.add(supervisedModel.outputLayer.activationArray.toMutableList())
+            })
             addSeparator()
             add(createApplyImmediateLearningAction())
         }
@@ -161,9 +167,6 @@ class SupervisedModelNode(networkPanel: NetworkPanel, val supervisedModel: Super
 
         override val model: NetworkModel
             get() = this@SupervisedModelNode.supervisedModel
-
-        override val toolTipText: String
-            get() = "Double click to train..."
 
     }
 }

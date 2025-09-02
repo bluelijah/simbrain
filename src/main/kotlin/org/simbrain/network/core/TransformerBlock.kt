@@ -388,9 +388,10 @@ class TransformerBlock(val sequenceSize: Int, inputSize: Int, val hiddenSize: In
 
     override fun toString(): String {
         return """
-            $id: ${javaClass.simpleName}
-                Input / Output Size (Sequence Size x Embedding Dim) = $sequenceSize x $inputSize 
-                Hidden Size = $hiddenSize
+                Name: $displayName ($sequenceSize x $inputSize)
+                Sequence Size: $sequenceSize 
+                Input Size: $inputSize 
+                Hidden Layer Size: $hiddenSize
             """.trimIndent()
         //Output Size (activations) = ${activations.shapeString}
         //K=${K.shapeString}, Q=${Q.shapeString}, V=${V.shapeString}

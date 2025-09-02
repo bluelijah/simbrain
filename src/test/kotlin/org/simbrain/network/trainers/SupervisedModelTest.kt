@@ -11,7 +11,6 @@ import org.simbrain.util.allPropertiesToString
 import org.simbrain.util.copyFrom
 import org.simbrain.util.format
 import org.simbrain.util.math.SigmoidFunctionEnum
-import smile.math.matrix.Matrix
 
 class SupervisedModelTest {
 
@@ -21,7 +20,7 @@ class SupervisedModelTest {
     val wm = WeightMatrix(inputArray, outputArray)
     val sm = SupervisedModel(inputArray, outputArray)
     init {
-        net.addNetworkModels(inputArray, outputArray, wm, sm)
+        net.addNetworkModelsAsync(inputArray, outputArray, wm, sm)
     }
 
     @Test
@@ -46,16 +45,16 @@ class SupervisedModelTest {
 
         val network2 = Network()
 
-        val backpropNetwork = BackpropNetwork(intArrayOf(2,2,1), null).also { network1.addNetworkModels(it) }
+        val backpropNetwork = BackpropNetwork(intArrayOf(2,2,1), null).also { network1.addNetworkModelsAsync(it) }
 
-        val layer1 = NeuronArray(2).also { network2.addNetworkModels(it) }.also { it.isClamped = true }
-        val layer2 = NeuronArray(2).also { network2.addNetworkModels(it) }.also { it.updateRule = SigmoidalRule() }
-        val layer3 = NeuronArray(1).also { network2.addNetworkModels(it) }.also { it.updateRule = SigmoidalRule() }
+        val layer1 = NeuronArray(2).also { network2.addNetworkModelsAsync(it) }.also { it.isClamped = true }
+        val layer2 = NeuronArray(2).also { network2.addNetworkModelsAsync(it) }.also { it.updateRule = SigmoidalRule() }
+        val layer3 = NeuronArray(1).also { network2.addNetworkModelsAsync(it) }.also { it.updateRule = SigmoidalRule() }
 
-        val wm1 = WeightMatrix(layer1, layer2).also { network2.addNetworkModels(it) }
-        val wm2 = WeightMatrix(layer2, layer3).also { network2.addNetworkModels(it) }
+        val wm1 = WeightMatrix(layer1, layer2).also { network2.addNetworkModelsAsync(it) }
+        val wm2 = WeightMatrix(layer2, layer3).also { network2.addNetworkModelsAsync(it) }
 
-        val supervisedModel = SupervisedModel(layer1, layer3).also { network2.addNetworkModels(it) }
+        val supervisedModel = SupervisedModel(layer1, layer3).also { network2.addNetworkModelsAsync(it) }
 
         val SupervisedTrainer = SupervisedTrainer(network1, backpropNetwork).apply {
             config.optimizer = MomentumOptimizer()
@@ -64,28 +63,28 @@ class SupervisedModelTest {
             config.optimizer = MomentumOptimizer()
         }
 
-        val trainingInputs = Matrix.of(arrayOf(
-            doubleArrayOf(0.0, 0.0),
-            doubleArrayOf(1.0, 0.0),
-            doubleArrayOf(0.0, 1.0),
-            doubleArrayOf(1.0, 1.0)
-        ))
-
-        val trainingTargets = Matrix.of(arrayOf(
-            doubleArrayOf(0.0),
-            doubleArrayOf(1.0),
-            doubleArrayOf(1.0),
-            doubleArrayOf(0.0)
-        ))
-
-        backpropNetwork.trainingSet = MatrixDataset(
-            inputs = trainingInputs.clone(),
-            targets = trainingTargets.clone()
+        val trainingInputs = mutableListOf(
+            mutableListOf(0.0, 0.0),
+            mutableListOf(1.0, 0.0),
+            mutableListOf(0.0, 1.0),
+            mutableListOf(1.0, 1.0)
         )
 
-        supervisedModel.trainingSet = MatrixDataset(
-            inputs = trainingInputs.clone(),
-            targets = trainingTargets.clone()
+        val trainingTargets = mutableListOf(
+            mutableListOf(0.0),
+            mutableListOf(1.0),
+            mutableListOf(1.0),
+            mutableListOf(0.0)
+        )
+
+        backpropNetwork.trainingSet = TrainingDataset(
+            inputs = trainingInputs,
+            targets = trainingTargets
+        )
+
+        supervisedModel.trainingSet = TrainingDataset(
+            inputs = trainingInputs,
+            targets = trainingTargets
         )
 
         assertEquals(SupervisedTrainer.config.learningRate, supervisedTrainer.config.learningRate) { "Learning rate should be the same" }
@@ -99,11 +98,11 @@ class SupervisedModelTest {
         }
 
         with(network1) {
-            backpropNetwork.inputLayer.setActivations(trainingInputs.row(0))
+            backpropNetwork.inputLayer.setActivations(trainingInputs[0].toDoubleArray())
             backpropNetwork.forwardPass()
         }
         with(network2) {
-            supervisedModel.inputLayer.setActivations(trainingInputs.row(0))
+            supervisedModel.inputLayer.setActivations(trainingInputs[0].toDoubleArray())
             supervisedModel.forwardPass()
         }
 
@@ -152,23 +151,23 @@ class SupervisedModelTest {
 
         val network2 = Network()
 
-        val na1 = NeuronArray(2).also { network1.addNetworkModels(it) }.also { it.isClamped = true; it.label = "layer1" }
-        val na2 = NeuronArray(2).also { network1.addNetworkModels(it) }.also { it.updateRule = SigmoidalRule().apply { type = SigmoidFunctionEnum.ARCTAN }; it.label = "layer2" }
-        val na3 = NeuronArray(1).also { network1.addNetworkModels(it) }.also { it.updateRule = SigmoidalRule().apply { type = SigmoidFunctionEnum.ARCTAN }; it.label = "layer3" }
+        val na1 = NeuronArray(2).also { network1.addNetworkModelsAsync(it) }.also { it.isClamped = true; it.label = "layer1" }
+        val na2 = NeuronArray(2).also { network1.addNetworkModelsAsync(it) }.also { it.updateRule = SigmoidalRule().apply { type = SigmoidFunctionEnum.ARCTAN }; it.label = "layer2" }
+        val na3 = NeuronArray(1).also { network1.addNetworkModelsAsync(it) }.also { it.updateRule = SigmoidalRule().apply { type = SigmoidFunctionEnum.ARCTAN }; it.label = "layer3" }
 
-        val ng1 = NeuronGroup(2).also { network2.addNetworkModels(it) }.also { it.isClamped = true; it.label = "layer1" }
-        val ng2 = NeuronGroup(2).also { network2.addNetworkModels(it) }.also { it.updateRule = SigmoidalRule().apply { type = SigmoidFunctionEnum.ARCTAN }; it.label = "layer2" }
-        val ng3 = NeuronGroup(1).also { network2.addNetworkModels(it) }.also { it.updateRule = SigmoidalRule().apply { type = SigmoidFunctionEnum.ARCTAN }; it.label = "layer3" }
+        val ng1 = NeuronGroup(2).also { network2.addNetworkModelsAsync(it) }.also { it.isClamped = true; it.label = "layer1" }
+        val ng2 = NeuronGroup(2).also { network2.addNetworkModelsAsync(it) }.also { it.updateRule = SigmoidalRule().apply { type = SigmoidFunctionEnum.ARCTAN }; it.label = "layer2" }
+        val ng3 = NeuronGroup(1).also { network2.addNetworkModelsAsync(it) }.also { it.updateRule = SigmoidalRule().apply { type = SigmoidFunctionEnum.ARCTAN }; it.label = "layer3" }
 
-        val nawm1 = WeightMatrix(na1, na2).also { network1.addNetworkModels(it) }.also { it.label = "wm1" }
-        val nawm2 = WeightMatrix(na2, na3).also { network1.addNetworkModels(it) }.also { it.label = "wm2" }
+        val nawm1 = WeightMatrix(na1, na2).also { network1.addNetworkModelsAsync(it) }.also { it.label = "wm1" }
+        val nawm2 = WeightMatrix(na2, na3).also { network1.addNetworkModelsAsync(it) }.also { it.label = "wm2" }
 
-        val ngwm1 = WeightMatrix(ng1, ng2).also { network2.addNetworkModels(it) }.also { it.label = "wm1" }
-        val ngwm2 = WeightMatrix(ng2, ng3).also { network2.addNetworkModels(it) }.also { it.label = "wm2" }
+        val ngwm1 = WeightMatrix(ng1, ng2).also { network2.addNetworkModelsAsync(it) }.also { it.label = "wm1" }
+        val ngwm2 = WeightMatrix(ng2, ng3).also { network2.addNetworkModelsAsync(it) }.also { it.label = "wm2" }
 
-        val naModel = SupervisedModel(na1, na3).also { network1.addNetworkModels(it) }
+        val naModel = SupervisedModel(na1, na3).also { network1.addNetworkModelsAsync(it) }
 
-        val ngModel = SupervisedModel(ng1, ng3).also { network2.addNetworkModels(it) }
+        val ngModel = SupervisedModel(ng1, ng3).also { network2.addNetworkModelsAsync(it) }
 
         val naTrainer = SupervisedTrainer(network1, naModel).apply {
             config.optimizer = MomentumOptimizer(0.0)
@@ -178,28 +177,28 @@ class SupervisedModelTest {
             config.optimizer = MomentumOptimizer(0.0)
         }
 
-        val trainingInputs = Matrix.of(arrayOf(
-            doubleArrayOf(0.0, 0.0),
-            doubleArrayOf(1.0, 0.0),
-            doubleArrayOf(0.0, 1.0),
-            doubleArrayOf(1.0, 1.0)
-        ))
-
-        val trainingTargets = Matrix.of(arrayOf(
-            doubleArrayOf(0.0),
-            doubleArrayOf(1.0),
-            doubleArrayOf(1.0),
-            doubleArrayOf(0.0)
-        ))
-
-        naModel.trainingSet = MatrixDataset(
-            inputs = trainingInputs.clone(),
-            targets = trainingTargets.clone()
+        val trainingInputs = mutableListOf(
+            mutableListOf(0.0, 0.0),
+            mutableListOf(1.0, 0.0),
+            mutableListOf(0.0, 1.0),
+            mutableListOf(1.0, 1.0)
         )
 
-        ngModel.trainingSet = MatrixDataset(
-            inputs = trainingInputs.clone(),
-            targets = trainingTargets.clone()
+        val trainingTargets = mutableListOf(
+            mutableListOf(0.0),
+            mutableListOf(1.0),
+            mutableListOf(1.0),
+            mutableListOf(0.0)
+        )
+
+        naModel.trainingSet = TrainingDataset(
+            inputs = trainingInputs,
+            targets = trainingTargets
+        )
+
+        ngModel.trainingSet = TrainingDataset(
+            inputs = trainingInputs,
+            targets = trainingTargets
         )
 
         assertEquals(naTrainer.config.learningRate, ngTrainer.config.learningRate) { "Learning rate should be the same" }
@@ -212,11 +211,11 @@ class SupervisedModelTest {
         nawm2.weights.copyFrom(ngwm2.weights)
 
         with(network1) {
-            naModel.inputLayer.setActivations(trainingInputs.row(0))
+            naModel.inputLayer.setActivations(trainingInputs[0].toDoubleArray())
             naModel.forwardPass()
         }
         with(network2) {
-            ngModel.inputLayer.setActivations(trainingInputs.row(0))
+            ngModel.inputLayer.setActivations(trainingInputs[0].toDoubleArray())
             ngModel.forwardPass()
         }
 
@@ -267,19 +266,19 @@ class SupervisedModelTest {
 
         val network2 = Network()
 
-        val backpropNetwork = BackpropNetwork(intArrayOf(2,2,1), null).also { network1.addNetworkModels(it) }
+        val backpropNetwork = BackpropNetwork(intArrayOf(2,2,1), null).also { network1.addNetworkModelsAsync(it) }
 
         backpropNetwork.layerList.forEachIndexed { index, layer -> layer.label = "layer${index + 1}" }
         backpropNetwork.wmList.forEachIndexed { index, wm -> wm.label = "wm${index + 1}" }
 
-        val layer1 = NeuronGroup(2).also { network2.addNetworkModels(it) }.also { it.label = "layer1"; it.isClamped = true }
-        val layer2 = NeuronGroup(2).also { network2.addNetworkModels(it) }.also { it.label = "layer2"; it.updateRule = SigmoidalRule() }
-        val layer3 = NeuronGroup(1).also { network2.addNetworkModels(it) }.also { it.label = "layer3"; it.updateRule = SigmoidalRule() }
+        val layer1 = NeuronGroup(2).also { network2.addNetworkModelsAsync(it) }.also { it.label = "layer1"; it.isClamped = true }
+        val layer2 = NeuronGroup(2).also { network2.addNetworkModelsAsync(it) }.also { it.label = "layer2"; it.updateRule = SigmoidalRule() }
+        val layer3 = NeuronGroup(1).also { network2.addNetworkModelsAsync(it) }.also { it.label = "layer3"; it.updateRule = SigmoidalRule() }
 
-        val wm1 = SynapseGroup(layer1, layer2).also { it.label = "wm1"; network2.addNetworkModels(it) }
-        val wm2 = SynapseGroup(layer2, layer3).also { it.label = "wm2"; network2.addNetworkModels(it) }
+        val wm1 = SynapseGroup(layer1, layer2).also { it.label = "wm1"; network2.addNetworkModelsAsync(it) }
+        val wm2 = SynapseGroup(layer2, layer3).also { it.label = "wm2"; network2.addNetworkModelsAsync(it) }
 
-        val supervisedModel = SupervisedModel(layer1, layer3).also { network2.addNetworkModels(it) }
+        val supervisedModel = SupervisedModel(layer1, layer3).also { network2.addNetworkModelsAsync(it) }
 
         val SupervisedTrainer = SupervisedTrainer(network1, backpropNetwork).apply {
             config.optimizer = MomentumOptimizer(0.0)
@@ -288,28 +287,28 @@ class SupervisedModelTest {
             config.optimizer = MomentumOptimizer(0.0)
         }
 
-        val trainingInputs = Matrix.of(arrayOf(
-            doubleArrayOf(0.0, 0.0),
-            doubleArrayOf(1.0, 0.0),
-            doubleArrayOf(0.0, 1.0),
-            doubleArrayOf(1.0, 1.0)
-        ))
-
-        val trainingTargets = Matrix.of(arrayOf(
-            doubleArrayOf(0.0),
-            doubleArrayOf(1.0),
-            doubleArrayOf(1.0),
-            doubleArrayOf(0.0)
-        ))
-
-        backpropNetwork.trainingSet = MatrixDataset(
-            inputs = trainingInputs.clone(),
-            targets = trainingTargets.clone()
+        val trainingInputs = mutableListOf(
+            mutableListOf(0.0, 0.0),
+            mutableListOf(1.0, 0.0),
+            mutableListOf(0.0, 1.0),
+            mutableListOf(1.0, 1.0)
         )
 
-        supervisedModel.trainingSet = MatrixDataset(
-            inputs = trainingInputs.clone(),
-            targets = trainingTargets.clone()
+        val trainingTargets = mutableListOf(
+            mutableListOf(0.0),
+            mutableListOf(1.0),
+            mutableListOf(1.0),
+            mutableListOf(0.0)
+        )
+
+        backpropNetwork.trainingSet = TrainingDataset(
+            inputs = trainingInputs,
+            targets = trainingTargets
+        )
+
+        supervisedModel.trainingSet = TrainingDataset(
+            inputs = trainingInputs,
+            targets = trainingTargets
         )
 
         assertEquals(SupervisedTrainer.config.learningRate, supervisedTrainer.config.learningRate) { "Learning rate should be the same" }
@@ -327,11 +326,11 @@ class SupervisedModelTest {
         }
 
         with(network1) {
-            backpropNetwork.inputLayer.setActivations(trainingInputs.row(0))
+            backpropNetwork.inputLayer.setActivations(trainingInputs[0].toDoubleArray())
             backpropNetwork.forwardPass()
         }
         with(network2) {
-            supervisedModel.inputLayer.setActivations(trainingInputs.row(0))
+            supervisedModel.inputLayer.setActivations(trainingInputs[0].toDoubleArray())
             supervisedModel.forwardPass()
         }
 

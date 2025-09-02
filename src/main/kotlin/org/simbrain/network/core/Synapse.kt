@@ -79,7 +79,11 @@ class Synapse : NetworkModel, EditableObject, AttributeContainer {
     /**
      * The update method of this synapse, which corresponds to what kind of synapse it is.
      */
-    @UserParameter(label = "Learning Rule", order = 100)
+    @UserParameter(
+        label = "Learning Rule",
+        description = "Rule which determines how synapse strength changes, usually based on the neurons it is connected to",
+        order = 100
+    )
     var learningRule = DEFAULT_LEARNING_RULE
         set(newLearningRule) {
             val oldRule = learningRule
@@ -93,7 +97,12 @@ class Synapse : NetworkModel, EditableObject, AttributeContainer {
     /**
      * Only used if source neuron is a spiking neuron.
      */
-    @UserParameter(label = "Spike Responder", showDetails = false, order = 200)
+    @UserParameter(
+        label = "Spike Responder",
+        description = "How this synapse responds when the presynaptic neuron (which must be spiking) spikes ",
+        showDetails = false,
+        order = 200
+    )
     var spikeResponder = DEFAULT_SPIKE_RESPONDER
         set(newResponder) {
             field = newResponder
@@ -396,14 +405,6 @@ class Synapse : NetworkModel, EditableObject, AttributeContainer {
         }
     }
 
-    val toolTipText: String
-        /**
-         * Returns string for tool tip or short description.
-         *
-         * @return tool tip text
-         */
-        get() = "Strength: " + Utils.round(this.strength, MAX_DIGITS)
-
     val symmetricSynapse: Synapse?
         /**
          * Returns symmetric synapse if there is one, null otherwise.
@@ -468,7 +469,13 @@ class Synapse : NetworkModel, EditableObject, AttributeContainer {
     }
 
     override fun toString(): String {
-        return ("$id: Strength = ${SimbrainMath.roundDouble(strength, 3)} Connects ${source.id} to ${target.id}")
+        return """
+            Name: $displayName
+            Strength: $strength
+            Learning rule: ${learningRule.name}
+            Source: ${source.id}
+            Target: ${target.id}
+        """.trimIndent()
     }
 
     /**

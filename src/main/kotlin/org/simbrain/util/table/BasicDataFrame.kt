@@ -47,6 +47,7 @@ class BasicDataFrame(
     override fun deleteColumn(colIndex: Int, fireEvent: Boolean) {
         if (validateColumnIndex(colIndex)) {
             data.forEach { row -> row.removeAt(colIndex) }
+            columns.removeAt(colIndex) // Also remove from columns list
             if (fireEvent) {
                 fireTableStructureChanged()
             }
@@ -76,11 +77,6 @@ class BasicDataFrame(
     }
 
     override fun deleteRow(rowIndex: Int, fireEvent: Boolean) {
-        // Allowing removal of all rows causes weird behavior, so we just aren't allowing it
-        //  TODO: Empty tables should be possible.
-        if (rowCount == 1) {
-            return
-        }
         if (validateRowIndex(rowIndex)) {
             data.removeAt(rowIndex)
             if (fireEvent) {
@@ -94,7 +90,7 @@ class BasicDataFrame(
     }
 
     override fun getColumnCount(): Int {
-        return if (data.isEmpty()) 0 else data[0].size
+        return columns.size
     }
 
     override fun getValueAt(rowIndex: Int, columnIndex: Int): Any? {

@@ -5,11 +5,11 @@ import org.simbrain.network.core.SpikingNeuronUpdateRule;
 import org.simbrain.network.gui.NetworkPanel;
 import org.simbrain.util.ResourceManager;
 import org.simbrain.util.StandardDialog;
-import org.simbrain.util.Utils;
 import org.simbrain.workspace.gui.SimbrainDesktop;
 
 import javax.swing.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.List;
@@ -105,11 +105,19 @@ public class NeuronGroupNode extends AbstractNeuronCollectionNode {
 
         // Selection submenu
         menu.addSeparator();
-        Action selectSynapses = new AbstractAction("Select Neurons") {
+        Action selectSynapses = new AbstractAction("Select Internal Neurons") {
+
+            {
+                // Main key binding is in Keybindings.kt. This is here just to force the binding to show in UI.
+                putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke(KeyEvent.VK_S, 0));
+            }
+
             @Override
             public void actionPerformed(final ActionEvent event) {
                 selectNeurons();
             }
+
+
         };
         menu.add(selectSynapses);
         Action selectIncomingNodes = new AbstractAction("Select Incoming Synapses") {
@@ -243,14 +251,6 @@ public class NeuronGroupNode extends AbstractNeuronCollectionNode {
             return NeuronGroupNode.this.getPropertyDialog();
         }
 
-        @Override
-        public String getToolTipText() {
-            return "NeuronGroup: " + neuronGroup.getId()
-                    + " Top-Left: (" + Utils.round(neuronGroup.getTopLeftLocation().x, 2) + ","
-                    + Utils.round(neuronGroup.getTopLeftLocation().y, 2) + ")"
-                    + " Center: (" + Utils.round(neuronGroup.getLocation().getX(), 2) + ","
-                    + Utils.round(neuronGroup.getLocation().getY(), 2) + ")";
-        }
     }
 
     @Override

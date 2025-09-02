@@ -1,6 +1,7 @@
 package org.simbrain.network.core
 
 import org.simbrain.network.events.NeuronEvents
+import org.simbrain.network.gui.createTooltipText
 import org.simbrain.network.updaterules.LinearRule
 import org.simbrain.network.updaterules.NeuronUpdateRule
 import org.simbrain.network.updaterules.interfaces.BoundedUpdateRule
@@ -57,7 +58,11 @@ class Neuron : LocatableModel, EditableObject, AttributeContainer {
      * The update method of this neuron, which corresponds to what kind of
      * neuron it is.
      */
-    @UserParameter(label = "Update Rule", order = 100)
+    @UserParameter(
+        label = "Update Rule",
+        description = "Neuron update rule, which determines how activations evolve and respond to inputs.",
+        order = 100
+    )
     var updateRule: NeuronUpdateRule<*, *> = LinearRule()
         set(value) {
             val oldRule = field
@@ -474,7 +479,11 @@ class Neuron : LocatableModel, EditableObject, AttributeContainer {
     }
 
     override fun toString(): String {
-        return "$id: $type Activation = ${SimbrainMath.roundDouble(activation, 3)}"
+        return """
+            Name: $displayName
+            Update rule: $type 
+            Activation: ${SimbrainMath.roundDouble(activation, 3)}
+        """.trimIndent()
     }
 
     override fun clear() {
@@ -507,7 +516,9 @@ class Neuron : LocatableModel, EditableObject, AttributeContainer {
      *
      * @return tool tip text
      */
-    val toolTipText: String? get() = updateRule.getToolTipText(this)
+    val toolTipText: String get() = createTooltipText(this) {
+        updateRule.getToolTipText(this)
+    }
 
     /**
      * Randomize all synapses that attach to this neuron.

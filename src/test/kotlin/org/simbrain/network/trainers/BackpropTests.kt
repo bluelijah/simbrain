@@ -12,10 +12,12 @@ import org.simbrain.network.updaterules.LinearRule
 import org.simbrain.network.updaterules.SigmoidalRule
 import org.simbrain.network.updaterules.SoftmaxRule
 import org.simbrain.network.updaterules.interfaces.BoundedUpdateRule
+import org.simbrain.util.identityMutableList
 import org.simbrain.util.math.SigmoidFunctionEnum
 import org.simbrain.util.sse
 import org.simbrain.util.stats.distributions.NormalDistribution
 import org.simbrain.util.toColumnVector
+import org.simbrain.util.toMutableListOfLists
 import smile.math.matrix.Matrix
 import kotlin.random.Random
 
@@ -44,7 +46,7 @@ class BackpropTests {
         }
         (na3.updateRule as BoundedUpdateRule).upperBound = 1.0
         (na3.updateRule as BoundedUpdateRule).lowerBound = -1.0
-        net.addNetworkModels(na1, na2, na3, wm1, wm2)
+        net.addNetworkModelsAsync(na1, na2, na3, wm1, wm2)
         weightInit.initializeWeights(wm1)
         weightInit.initializeWeights(wm2)
     }
@@ -105,7 +107,7 @@ class BackpropTests {
             weightInit.initializeWeights(wm2)
             na2.randomizeBiases(NormalDistribution(0.0, .01))
             na3.randomizeBiases(NormalDistribution(0.0, .01))
-            supervisedModel.trainingSet = MatrixDataset(inputVector.transpose(), targetVector.transpose())
+            supervisedModel.trainingSet = TrainingDataset(inputVector.transpose().toMutableListOfLists(), targetVector.transpose().toMutableListOfLists())
             val trainer = SupervisedTrainer(net, supervisedModel)
             repeat(nRuns) {
                 trainer.trainOnce()
@@ -139,7 +141,7 @@ class BackpropTests {
 
             val targetVector = makeMockTargets(na4.size)
 
-            net.addNetworkModels(wm3, na4)
+            net.addNetworkModelsAsync(wm3, na4)
             val supervisedModel = SupervisedModel(na1, na4)
             testBackprop(commonInputs, targetVector, supervisedModel, nRuns = 100)
             //println("Outputs: ${na4.activations}, SSE = ${targetVector sse na4.activations}")
@@ -158,7 +160,7 @@ class BackpropTests {
             }
             val wm = WeightMatrix(inputLayer, outputLayer)
             weightInit.initializeWeights(wm)
-            addNetworkModels(inputLayer, outputLayer, wm)
+            addNetworkModelsAsync(inputLayer, outputLayer, wm)
             val supervisedModel = SupervisedModel(inputLayer, outputLayer)
             supervisedModel.trainerConfig.lossFunction = BackpropLossFunction.CrossEntropy
             testBackprop(inputs, targets, supervisedModel, nRuns = 10000)
@@ -170,17 +172,17 @@ class BackpropTests {
 
     @Test
     fun `train 10-7-10 auto-encoder`() {
-        val inputs = Matrix.eye(10)
+        val inputs = identityMutableList(10)
         val bp = BackpropNetwork(intArrayOf(10, 5, 10), null).apply {
             initWeights()
             initBiases()
             trainerConfig.learningRate = .01
-            trainingSet = MatrixDataset(
+            trainingSet = TrainingDataset(
                 inputs = inputs,
                 targets = inputs
             )
         }
-        net.addNetworkModels(bp)
+        net.addNetworkModelsAsync(bp)
         val trainer = SupervisedTrainer(net, bp)
         runBlocking {
             repeat(1000) {

@@ -1,6 +1,5 @@
 package org.simbrain.custom_sims.simulations
 
-import kotlinx.coroutines.awaitAll
 import org.simbrain.custom_sims.*
 import org.simbrain.network.connections.Sparse
 import org.simbrain.network.core.Network
@@ -56,14 +55,14 @@ val objectTrackingSim = newSim {
     val resNeurons = (0..numResNeurons).map {
         Neuron(AllostaticUpdateRule())
     }
-    network.addNetworkModels(resNeurons).awaitAll()
+    network.addNetworkModels(resNeurons)
     val reservoir = NeuronCollection(resNeurons)
-    network.addNetworkModel(reservoir)?.await()
+    network.addNetworkModel(reservoir)
     reservoir.label = "Reservoir"
     reservoir.layout(GridLayout())
     reservoir.location = point(0, 0)
     val reservoirSynapseGroup = SynapseGroup(reservoir, reservoir, sparse)
-    network.addNetworkModel(reservoirSynapseGroup)?.await()
+    network.addNetworkModel(reservoirSynapseGroup)
     val dist = NormalDistribution(1.0, .1)
     reservoirSynapseGroup.synapses.forEach { s ->
         s.strength = dist.sampleDouble()
@@ -75,12 +74,12 @@ val objectTrackingSim = newSim {
         val neuron = Neuron(rule)
         neuron
     }
-    network.addNetworkModels(leftInputNeurons).awaitAll()
+    network.addNetworkModels(leftInputNeurons)
     val leftInputs = NeuronCollection(leftInputNeurons)
-    network.addNetworkModel(leftInputs)?.await()
+    network.addNetworkModel(leftInputs)
     leftInputs.label = "Left Inputs"
     leftInputs.layout(GridLayout())
-    leftInputs.location = point(-616, -195)
+    leftInputs.location = point(-816, -250)
 
     // Right inputs
     val rightInputNeurons = (0 until sensoryNeurons).map {
@@ -88,21 +87,21 @@ val objectTrackingSim = newSim {
         val neuron = Neuron(rule)
         neuron
     }
-    network.addNetworkModels(rightInputNeurons).awaitAll()
+    network.addNetworkModels(rightInputNeurons)
     val rightInputs = NeuronCollection(rightInputNeurons)
-    network.addNetworkModel(rightInputs)?.await()
+    network.addNetworkModel(rightInputs)
     rightInputs.label = "Right Inputs"
     rightInputs.layout(GridLayout())
-    rightInputs.location = point(-616, 225)
+    rightInputs.location = point(-816, 280)
 
     // Connect input nodes to reservoir
     val leftInputsToRes = SynapseGroup(leftInputs, reservoir, sparse)
-    network.addNetworkModel(leftInputsToRes)?.await()
+    network.addNetworkModel(leftInputsToRes)
     leftInputsToRes.synapses.forEach { s ->
         s.strength = 0.75
     }
     val rightInputsToRes = SynapseGroup(rightInputs, reservoir, sparse)
-    network.addNetworkModel(rightInputsToRes)?.await()
+    network.addNetworkModel(rightInputsToRes)
     rightInputsToRes.synapses.forEach { s ->
         s.strength = 0.75
     }
@@ -110,8 +109,8 @@ val objectTrackingSim = newSim {
     // Output neurons
     val leftTurnNeuron = Neuron(PercentIncomingNeuronRule())
     val rightTurnNeuron = Neuron(PercentIncomingNeuronRule())
-    network.addNetworkModel(leftTurnNeuron)?.await()
-    network.addNetworkModel(rightTurnNeuron)?.await()
+    network.addNetworkModel(leftTurnNeuron)
+    network.addNetworkModel(rightTurnNeuron)
     leftTurnNeuron.upperBound = 100.0
     rightTurnNeuron.upperBound = 100.0
     val leftTurnCollection = NeuronCollection(listOf(leftTurnNeuron))
@@ -120,23 +119,14 @@ val objectTrackingSim = newSim {
     val rightTurnCollection = NeuronCollection(listOf(rightTurnNeuron))
     rightTurnCollection.label = "Right Turn"
     network.addNetworkModel(rightTurnCollection)
-    leftTurnNeuron.location = point(546, -203)
-    rightTurnNeuron.location = point(573, 323)
+    leftTurnNeuron.location = point(700, -300)
+    rightTurnNeuron.location = point(700, 350)
     val resToLeftTurn = SynapseGroup(reservoir, leftTurnCollection, sparse)
-    network.addNetworkModel(resToLeftTurn)?.await()
+    network.addNetworkModel(resToLeftTurn)
     resToLeftTurn.displaySynapses = false
     val resToRightTurn = SynapseGroup(reservoir, rightTurnCollection, sparse)
-    network.addNetworkModel(resToRightTurn)?.await()
+    network.addNetworkModel(resToRightTurn)
     resToRightTurn.displaySynapses = false
-
-    // Location of the network in the desktop
-    withGui {
-        place(networkComponent) {
-            location = point(183, 0)
-            width = 600
-            height = 600
-        }
-    }
 
     network.addUpdateAction(updateAction("Record activations") {
         if (isRecording) {
@@ -232,11 +222,9 @@ val objectTrackingSim = newSim {
 
     workspace.addWorkspaceComponent(odorWorldComponent)
     withGui {
-        place(odorWorldComponent) {
-            location = point(783, 0)
-            width = 600
-            height = 600
-        }
+        place(networkComponent, 258, 0, 600, 600)
+        place(odorWorldComponent, 867, 0, 600, 600)
+
     }
 
     // Couple output neurons to effectors

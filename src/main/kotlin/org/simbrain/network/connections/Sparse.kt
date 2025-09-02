@@ -91,6 +91,8 @@ class Sparse @JvmOverloads constructor(
 
     override fun toString() = name
 
+    override fun tooltipText(): String = "Sparse (${(connectionDensity * 100).toInt()}%)"
+
     override fun copy(): Sparse {
         return Sparse(connectionDensity, equalizeEfferents, allowSelfConnection).also {
             commonCopy(it)
@@ -156,7 +158,7 @@ fun createSparseSynapses(
     } else {
         val numbersOfConnectionToRemove = -(sparsityDelta * possibleConnections.size).roundToInt()
         val connectionsToRemove = existingSynapses.shuffled(random).take(numbersOfConnectionToRemove)
-        return ConnectionsResult.Remove(connectionsToRemove)
+        return ConnectionsResult.Remove(connectionsToRemove, numbersOfConnectionToRemove == existingSynapses.size)
     }
 }
 
@@ -176,6 +178,6 @@ fun createSparseSynapses(
 
 sealed interface ConnectionsResult {
     data class Add(val connectionsToAdd: List<Synapse>) : ConnectionsResult
-    data class Remove(val connectionsToRemove: List<Synapse>): ConnectionsResult
+    data class Remove(val connectionsToRemove: List<Synapse>, val removedAll: Boolean): ConnectionsResult
     data class Reset(val resultConnections: List<Synapse>): ConnectionsResult
 }

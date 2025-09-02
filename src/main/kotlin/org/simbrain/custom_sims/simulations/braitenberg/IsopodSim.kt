@@ -30,6 +30,8 @@ val isopodSim = newSim {
     var defaultNumTrials = 5
     val maxIterationsPerTrial = 5000
     val hitRadius = 80
+    val smellDispersion = 350.0
+    val speed = 5.0
 
     // Other variables
     val log = StringBuilder()
@@ -42,7 +44,7 @@ val isopodSim = newSim {
 
     val networkComponent = addNetworkComponent("Network")
     val network = networkComponent.network
-    var noiseSource = NormalDistribution(1.0, .9)
+    var noiseSource = NormalDistribution(2.0, .9)
 
     val neuronLeftSensor = network.addNeuron {
         location = point(0, 100)
@@ -77,7 +79,7 @@ val isopodSim = newSim {
         lowerBound = 0.0
         upperBound = 10.0
         label = "Straight"
-        bias = 5.0
+        bias = speed
     }
 
     // Create the weights
@@ -162,7 +164,7 @@ val isopodSim = newSim {
                     // How the smell decays with distances
                     decayFunction = LinearDecayFunction()
                     decayFunction.peakDistance = 0.0
-                    decayFunction.dispersion = 350.0
+                    decayFunction.dispersion = smellDispersion
                     showDispersion = true
                 }
                 // A convenient way to show the hit radius. Not used as a sensor.
@@ -191,6 +193,7 @@ val isopodSim = newSim {
             width = 600
             height = 600
         }
+        isopod.select()
     }
 
     // ----- Make Couplings ------
@@ -232,6 +235,7 @@ val isopodSim = newSim {
     //Control Panel (5, 10, 143, 173)
 
     withGui {
+        isopod.select()
         createControlPanel("Control Panel", 130, 15) {
 
             suspend fun runTrials() {
