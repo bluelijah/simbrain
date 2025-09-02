@@ -49,10 +49,7 @@ val cortexLayers = newSim {
     workspace.clearWorkspace()
 
     // Build network
-    val nc = addNetworkComponent(
-        "Cortical Simulation",
-    )
-
+    val nc = addNetworkComponent("Cortical Simulation")
     val net = nc.network
 
     val rasterPlot = addRasterPlot("Raster Plot")
@@ -77,54 +74,35 @@ val cortexLayers = newSim {
             net.addNeuronGroup(numNeurons) {
                 updateRule = IntegrateAndFireRule().also {
                     it.restingPotential = restingPotential.sample()
+                    it.resetPotential = restingPotential.sample()
                     it.timeConstant = timeConstant.sample()
                     it.threshold = threshold.sample()
                     it.resistance = resistance.sample()
                     it.backgroundCurrent = 0.0
-                    it.resetPotential = restingPotential.sample()
+                    
                 }
             }
+        }
+    }
+
+    fun activateNeurons(layer: NeuronGroup, indices: List<Int>, current: Double = 10.0) {
+        for (i in indices) {
+            val neuron = layer.neuronList[i]
+            val rule = neuron.updateRule as IntegrateAndFireRule
+            rule.backgroundCurrent = current  // Temporarily inject current
         }
     }
 
     suspend fun connectLayers(
         src: NeuronGroup, tar: NeuronGroup,
         sparsity: Double,
-        spikeResponderParams: Triple<Double, Double, Double> = Triple(0.2, 600.0, 30.0) // U, D, F defaults
+        spikeResponderParams: Triple<Double, Double, Double> = Triple(0.2, 600.0, 30.0)
     ): SynapseGroup {
-        val exRand: ProbabilityDistribution = LogNormalDistribution(exlocation, exscale, false)
-        val inRand: ProbabilityDistribution = LogNormalDistribution(inlocation, inscale, true)
-        val con = Sparse(sparsity, false, false)
-        val sg = SynapseGroup(src, tar, con)
-        sg.connectionStrategy.exRandomizer = exRand
-        sg.connectionStrategy.inRandomizer = inRand
-        sg.randomizeExcitatory()
-        sg.randomizeInhibitory()
-        sg.label = "Synapses"
-
-        sg.synapses.filter { it.source.polarity == Polarity.EXCITATORY }.forEach {
-            it.upperBound = 200.0
-            it.lowerBound = 0.0
-        }
-        sg.synapses.filter { it.source.polarity == Polarity.INHIBITORY }.forEach {
-            it.upperBound = 0.0
-            it.lowerBound = -200.0
-        }
-
-        sg.synapses.forEach {
-            val stp = ShortTermPlasticity()
-            // Use specific parameters for this connection type
-            val (u, d, f) = spikeResponderParams
-            stp.U = u
-            stp.D = d
-            stp.F = f
-            // Configure the internal JumpAndDecay spike responder
-            (stp.spikeResponderLocal as JumpAndDecay).apply {
-                timeConstant = 5.0  // Standard decay time
-                useConvolution = false
-                baseLine = 0.0
-            }
-            it.spikeResponder = stp
+        val sg = SynapseGroup(src, tar, Sparse(sparsity, false, false))
+        // Set all weights to zero initially
+        sg.synapses.forEach { s ->
+            s.upperBound = 0.0
+            s.lowerBound = 0.0
         }
         net.addNetworkModel(sg)?.await()
         return sg
